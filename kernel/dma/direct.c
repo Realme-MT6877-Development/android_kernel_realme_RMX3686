@@ -10,6 +10,7 @@
 #include <linux/dma-contiguous.h>
 #include <linux/pfn.h>
 #include <linux/set_memory.h>
+#include <soc/oplus/system/oppo_project.h>
 
 #define DIRECT_MAPPING_ERROR		0
 
@@ -78,8 +79,19 @@ void *dma_direct_alloc(struct device *dev, size_t size, dma_addr_t *dma_handle,
 again:
 	/* CMA can be used only in the context which permits sleeping */
 	if (gfpflags_allow_blocking(gfp)) {
-		page = dma_alloc_from_contiguous(dev, count, page_order,
+		if (is_project(22612) || is_project(22694)
+			|| is_project(22693) || is_project(0x226B1)) {
+			if (attrs & DMA_ATTR_FORCE_CONTIGUOUS) {
+				page = dma_alloc_from_contiguous(dev, count, page_order,
 						 gfp & __GFP_NOWARN);
+			} else {
+				page = NULL;
+			}
+		} else {
+			page = dma_alloc_from_contiguous(dev, count, page_order,
+					gfp & __GFP_NOWARN);
+		}
+
 		if (page && !dma_coherent_ok(dev, page_to_phys(page), size)) {
 			dma_release_from_contiguous(dev, page, count);
 			page = NULL;

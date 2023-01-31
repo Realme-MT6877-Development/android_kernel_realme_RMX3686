@@ -1926,69 +1926,54 @@ static int check_layering_result(struct drm_mtk_layering_info *info)
 
 static int check_disp_info(struct drm_mtk_layering_info *disp_info)
 {
-	int disp_idx = 0;
-	int ghead = -1;
-	int gtail = -1;
-	int layer_num = 0;
-	int i;
+	int disp_idx;
 
 	if (disp_info == NULL) {
 		DDPPR_ERR("[HRT]disp_info is empty\n");
 		return -1;
 	}
 
-	for (i = 0; i < 3; i++) {
-		int mode = disp_info->disp_mode[i];
-		layer_num = disp_info->layer_num[i];
+	for (disp_idx = 0; disp_idx < HRT_TYPE_NUM; disp_idx++) {
+		int mode = disp_info->disp_mode[disp_idx];
+		int ghead = disp_info->gles_head[disp_idx];
+		int gtail = disp_info->gles_tail[disp_idx];
+		int layer_num = disp_info->layer_num[disp_idx];
 
 		if (mode < 0 || mode >= MTK_DRM_SESSION_NUM) {
-			DDPPR_ERR("[HRT] i %d, invalid mode %d\n", i, mode);
+			DDPPR_ERR("[HRT] disp_idx %d, invalid mode %d\n", disp_idx, mode);
 			return -1;
 		}
 
 		if (layer_num < 0) {
-			DDPPR_ERR("[HRT] i %d, invalid layer num %d\n",
-				  i, layer_num);
+			DDPPR_ERR("[HRT] disp_idx %d, invalid layer num %d\n", disp_idx, layer_num);
+			return -1;
+		}
+
+		if (layer_num > 0 && disp_info->input_config[disp_idx] == NULL) {
+			DDPPR_ERR("[HRT] input config is empty, disp:%d, l_num:%d\n", disp_idx,
+				  layer_num);
+			return -1;
+		}
+
+		if ((ghead < 0 && gtail >= 0) || (gtail < 0 && ghead >= 0) || (gtail < ghead) ||
+			(gtail >= layer_num)) {
+			dump_disp_info(disp_info, DISP_DEBUG_LEVEL_ERR);
+			DDPPR_ERR("[HRT] gles invalid, disp:%d, head:%d, tail:%d\n", disp_idx,
+				  disp_info->gles_head[disp_idx], disp_info->gles_tail[disp_idx]);
 			return -1;
 		}
 	}
 
 	/* these are set by kernel, should be 0 */
 	if (disp_info->res_idx || disp_info->hrt_weight || disp_info->hrt_idx) {
-		DDPPR_ERR("[HRT] fail, res_idx %d, hrt_weight %u, hrt_idx %u\n",
-			  disp_info->res_idx,
-			  disp_info->hrt_weight,
-			  disp_info->hrt_idx);
+		DDPPR_ERR("[HRT] fail, res_idx %d, hrt_weight %u, hrt_idx %u\n", disp_info->res_idx,
+			  disp_info->hrt_weight, disp_info->hrt_idx);
 		return -1;
-	}
-
-	for (disp_idx = 0; disp_idx < HRT_TYPE_NUM; disp_idx++) {
-		layer_num = disp_info->layer_num[disp_idx];
-		if (layer_num > 0 &&
-		    disp_info->input_config[disp_idx] == NULL) {
-			DDPPR_ERR(
-				"[HRT]input config is empty,disp:%d,l_num:%d\n",
-				disp_idx, layer_num);
-			return -1;
-		}
-
-		ghead = disp_info->gles_head[disp_idx];
-		gtail = disp_info->gles_tail[disp_idx];
-		if ((!((ghead == -1) && (gtail == -1)) &&
-			!((ghead >= 0) && (gtail >= 0))) ||
-			(ghead >= layer_num) ||
-			(gtail >= layer_num) ||
-			(ghead > gtail)) {
-			//dump_disp_info(disp_info, DISP_DEBUG_LEVEL_ERR);
-			DDPPR_ERR("[HRT]gles invalid,disp:%d,head:%d,tail:%d\n",
-				  disp_idx, disp_info->gles_head[disp_idx],
-				  disp_info->gles_tail[disp_idx]);
-			return -1;
-		}
 	}
 
 	return 0;
 }
+
 
 static int
 _copy_layer_info_from_disp(struct drm_mtk_layering_info *disp_info_user,
@@ -3164,19 +3149,21 @@ int mtk_layering_rule_ioctl(struct drm_device *dev, void *data,
 
 #if IS_ENABLED(CONFIG_COMPAT)
 struct drm_mtk_layering_info_32 {
-	compat_uptr_t input_config[3];
-	int disp_mode[3];
+	compat_uptr_t input_config[LYE_CRTC];
+	int disp_mode[LYE_CRTC];
 	/* index of crtc display mode including resolution, fps... */
-	int disp_mode_idx[3];
-	int layer_num[3];
-	int gles_head[3];
-	int gles_tail[3];
+	int disp_mode_idx[LYE_CRTC];
+	int layer_num[LYE_CRTC];
+	int gles_head[LYE_CRTC];
+	int gles_tail[LYE_CRTC];
 	int hrt_num;
+	uint32_t disp_idx;
+	uint32_t disp_list;
 	/* res_idx: SF/HWC selects which resolution to use */
 	int res_idx;
 	uint32_t hrt_weight;
 	uint32_t hrt_idx;
-	compat_uptr_t mml_frame_info[3];
+	compat_uptr_t mml_frame_info[LYE_CRTC];
 };
 
 int mtk_layering_rule_ioctl_compat(struct file *file, unsigned int cmd,
@@ -3188,7 +3175,7 @@ int mtk_layering_rule_ioctl_compat(struct file *file, unsigned int cmd,
 
 	if (copy_from_user(&data32, (void __user *)arg, sizeof(data32)))
 		return -EFAULT;
-	for (i = 0; i < 3; i++) {
+	for (i = 0; i < LYE_CRTC; i++) {
 		data.input_config[i] = compat_ptr(data32.input_config[i]);
 		data.disp_mode[i] = data32.disp_mode[i];
 		data.disp_mode_idx[i] = data32.disp_mode_idx[i];
@@ -3197,6 +3184,8 @@ int mtk_layering_rule_ioctl_compat(struct file *file, unsigned int cmd,
 		data.gles_tail[i] = data32.gles_tail[i];
 	}
 	data.hrt_num = data32.hrt_num;
+	data.disp_idx = data32.disp_idx;
+	data.disp_list = data32.disp_list;
 	data.res_idx = data32.res_idx;
 	data.hrt_weight = data32.hrt_weight;
 	data.hrt_idx = data32.hrt_idx;
@@ -3206,7 +3195,7 @@ int mtk_layering_rule_ioctl_compat(struct file *file, unsigned int cmd,
 	if (err)
 		return err;
 
-	for (i = 0; i < 3; i++) {
+	for (i = 0; i < LYE_CRTC; i++) {
 		//data32.input_config[i] = ptr_to_compat(data.input_config[i]);
 		data32.disp_mode[i] = data.disp_mode[i];
 		data32.disp_mode_idx[i] = data.disp_mode_idx[i];
@@ -3215,6 +3204,8 @@ int mtk_layering_rule_ioctl_compat(struct file *file, unsigned int cmd,
 		data32.gles_tail[i] = data.gles_tail[i];
 	}
 	data32.hrt_num = data.hrt_num;
+	data32.disp_idx = data.disp_idx;
+	data32.disp_list = data.disp_list;
 	data32.res_idx = data.res_idx;
 	data32.hrt_weight = data.hrt_weight;
 	data32.hrt_idx = data.hrt_idx;

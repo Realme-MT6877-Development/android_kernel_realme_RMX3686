@@ -2,6 +2,8 @@
 /*
  * Scheduler internal types and methods:
  */
+#ifndef __KERNEL_SCHED_H__
+#define __KERNEL_SCHED_H__
 #include <linux/sched.h>
 
 #include <linux/sched/autogroup.h>
@@ -87,9 +89,18 @@
 struct rq;
 struct cpuidle_state;
 
+#if defined(OPLUS_FEATURE_SCHED_ASSIST) && defined(CONFIG_OPLUS_FEATURE_SCHED_SPREAD)
+extern unsigned int sched_capacity_margin_up[NR_CPUS];
+extern unsigned int sched_capacity_margin_down[NR_CPUS];
+#endif
+
 /* task_struct::on_rq states: */
 #define TASK_ON_RQ_QUEUED	1
 #define TASK_ON_RQ_MIGRATING	2
+
+#ifdef OPLUS_FEATURE_SCHED_ASSIST
+extern int sysctl_uxchain_v2;
+#endif
 
 extern __read_mostly int scheduler_running;
 
@@ -895,9 +906,6 @@ struct rq {
 	/* capture load from *all* tasks on this CPU: */
 	struct load_weight	load;
 	unsigned long		nr_load_updates;
-#ifdef CONFIG_SMP
-	unsigned int		ttwu_pending;
-#endif
 	u64			nr_switches;
 
 #ifdef CONFIG_UCLAMP_TASK
@@ -1025,7 +1033,12 @@ struct rq {
 	struct cpuidle_state	*idle_state;
 	int			idle_state_idx;
 #endif
-
+#ifdef OPLUS_FEATURE_SCHED_ASSIST
+	struct list_head ux_thread_list;
+#endif /* OPLUS_FEATURE_SCHED_ASSIST */
+#if defined(OPLUS_FEATURE_SCHED_ASSIST) && defined(CONFIG_SCHED_WALT)
+	u64 window_start;
+#endif /* defined(OPLUS_FEATURE_SCHED_ASSIST) && defined(CONFIG_SCHED_WALT) */
 };
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
@@ -2447,6 +2460,13 @@ static inline unsigned long capacity_orig_of(int cpu)
 {
 	return cpu_rq(cpu)->cpu_capacity_orig;
 }
+
+#if defined(OPLUS_FEATURE_SCHED_ASSIST) && defined(CONFIG_SCHED_WALT)
+extern unsigned int sysctl_sched_use_walt_cpu_util;
+extern unsigned int sysctl_sched_use_walt_task_util;
+extern unsigned int walt_ravg_window;
+extern bool walt_disabled;
+#endif /* defined(OPLUS_FEATURE_SCHED_ASSIST) && defined(CONFIG_SCHED_WALT) */
 #endif
 
 /**
@@ -2546,7 +2566,6 @@ unsigned long scale_irq_capacity(unsigned long util, unsigned long irq, unsigned
 extern struct static_key_false sched_energy_present;
 #endif
 
-DECLARE_PER_CPU(int, cpufreq_idle_cpu);
-DECLARE_PER_CPU(spinlock_t, cpufreq_idle_cpu_lock);
-
 #include "extension/eas_plus.h"
+
+#endif /* __KERNEL_SCHED_H__ */

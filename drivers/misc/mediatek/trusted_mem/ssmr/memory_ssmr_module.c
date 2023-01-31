@@ -38,6 +38,7 @@
 #include <linux/sizes.h>
 #include <linux/dma-direct.h>
 #include <linux/kallsyms.h>
+#include <soc/oplus/system/oppo_project.h>
 
 #define SSMR_FEATURES_DT_UNAME "memory-ssmr-features"
 
@@ -454,8 +455,14 @@ static int memory_region_offline(struct SSMR_Feature *feature, phys_addr_t *pa,
 	 * setup init device with rmem
 	 */
 	of_reserved_mem_device_init_by_idx(ssmr_dev, ssmr_dev->of_node, 0);
-	feature->virt_addr = dma_alloc_attrs(ssmr_dev, alloc_size,
+	if (is_project(22612) || is_project(22694)
+		|| is_project(22693) || is_project(0x226B1)) {
+		feature->virt_addr = dma_alloc_attrs(ssmr_dev, alloc_size,
+					&feature->phy_addr, GFP_KERNEL, DMA_ATTR_FORCE_CONTIGUOUS);
+	} else {
+		feature->virt_addr = dma_alloc_attrs(ssmr_dev, alloc_size,
 					&feature->phy_addr, GFP_KERNEL, 0);
+	}
 
 	if (feature->phy_addr) {
 		pr_info("%s: pa=%pad is allocated\n", __func__,
