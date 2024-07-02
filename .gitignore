@@ -132,3 +132,7 @@ all.config
 
 # Kdevelop4
 *.kdev4
+clang
+out
+gcc
+gcc32
