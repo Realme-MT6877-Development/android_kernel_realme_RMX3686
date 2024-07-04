@@ -137,3 +137,5 @@ out
 gcc
 gcc32
 build.sh
+error.log
+kernel_log.txt
