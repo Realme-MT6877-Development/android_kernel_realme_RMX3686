@@ -216,7 +216,7 @@
 //#ifdef VENDOR_EDIT
 //#define WLAN_CFG_FILE_BUF_SIZE	2048
 //#else
-#define WLAN_CFG_FILE_BUF_SIZE	4096
+#define WLAN_CFG_FILE_BUF_SIZE	8192
 //#endif
 
 #define WLAN_CFG_REC_ENTRY_NUM_MAX 400
